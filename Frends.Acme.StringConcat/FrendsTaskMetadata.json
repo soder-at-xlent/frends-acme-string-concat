@@ -1,0 +1,7 @@
+{
+  "Tasks": [
+    {
+      "TaskMethod": "Frends.Acme.StringConcat.Tasks.Concat"
+    }
+  ]
+}

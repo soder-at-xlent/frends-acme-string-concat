@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify commit exists on origin/main
+        run: git branch --remote --contains | grep -q origin/main
+
+      - name: Setup .NET (from global.json)
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            global.json
+
+      - name: Check csproj <Version> matches tag
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          FILE_VERSION=$(dotnet msbuild Frends.Acme.StringConcat/Frends.Acme.StringConcat.csproj \
+            -getProperty:Version -nologo | tr -d '[:space:]')
+          echo "Tag Version:    $TAG_VERSION"
+          echo "csproj Version: $FILE_VERSION"
+          if [ "$FILE_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Version mismatch! csproj has $FILE_VERSION but tag is $TAG_VERSION."
+            exit 1
+          fi
+
+      - name: Restore
+        run: dotnet restore Frends.Acme.StringConcat.sln
+
+      - name: Build
+        run: dotnet build Frends.Acme.StringConcat.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
+
+      - name: Test
+        run: dotnet test Frends.Acme.StringConcat.sln -c Release --no-build
+
+      - name: Pack
+        run: dotnet pack Frends.Acme.StringConcat/Frends.Acme.StringConcat.csproj -c Release --no-build --output ./packages -p:ContinuousIntegrationBuild=true
+
+      - name: Push to GitHub Packages
+        run: |
+          ls -1 ./packages/*.nupkg
+          for pkg in ./packages/Frends.Acme.StringConcat.*.nupkg; do
+            [[ "$pkg" == *".symbols."* ]] && continue
+            dotnet nuget push "$pkg" \
+              --source "https://nuget.pkg.github.com/soder-at-xlent/index.json" \
+              --api-key "$GITHUB_TOKEN" \
+              --skip-duplicate
+          done
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./packages/Frends.Acme.StringConcat.*.nupkg
+          generate_release_notes: true
+          fail_on_unmatched_files: true
