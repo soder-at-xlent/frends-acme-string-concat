@@ -17,11 +17,11 @@ public class Input
     public string[] Strings { get; init; } = System.Array.Empty<string>();
 
     /// <summary>
-    /// Separator placed between each string. Defaults to empty (direct concatenation).
+    /// Separator placed between each string. Defaults to a comma.
     /// </summary>
     /// <example>", "</example>
     [DisplayFormat(DataFormatString = "Text")]
-    [DefaultValue("\"\"")]
+    [DefaultValue("\",\"")]
     public string Separator { get; init; } = string.Empty;
 }
 
